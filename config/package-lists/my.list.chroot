@@ -1,0 +1,9 @@
+
+less
+curl
+wget
+openssh-client
+openssh-server
+openssh-sftp-server
+apt-transport-https
+

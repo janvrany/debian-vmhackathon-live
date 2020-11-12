@@ -1,0 +1,17 @@
+.build
+.lock
+build.log
+cache
+
+config/binary
+config/bootstrap
+config/chroot
+config/common
+config/source
+
+chroot.*
+chroot
+
+binary
+
+live-image-amd64.*

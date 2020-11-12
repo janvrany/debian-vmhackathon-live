@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+lb config noauto \
+	--distribution buster \
+	--architectures=amd64 \
+	--binary-images iso-hybrid \
+	--iso-volume "2nd VM Hackathon Live CD" \
+ 	--archive-areas "main contrib" \
+	"${@}"
