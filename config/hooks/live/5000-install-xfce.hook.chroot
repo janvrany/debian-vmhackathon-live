@@ -39,3 +39,7 @@ apt-get -y install \
 	cmake \
 	firejail \
 	gcc g++
+
+# Remove libreoffice to save space!
+sudo apt -y remove `dpkg -l libreoffice* | grep ^ii | cut -d ' ' -f 3`
+sudo apt -y autoremove

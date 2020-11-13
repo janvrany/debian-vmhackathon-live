@@ -6,6 +6,8 @@ lb config noauto \
 	--distribution buster \
 	--architectures=amd64 \
 	--binary-images iso-hybrid \
+        --iso-application "2nd VM Hackathon Live CD" \
+        --iso-publisher "Jan Vrany <jan.vrany@labware.com>" \
 	--iso-volume "2nd VM Hackathon Live CD" \
  	--archive-areas "main contrib" \
 	"${@}"
