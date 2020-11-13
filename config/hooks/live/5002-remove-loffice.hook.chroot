@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -ex
+
+echo "Removing LibreOffice..."
+
+sudo apt -y remove `dpkg -l libreoffice* | grep ^ii | cut -d ' ' -f 3`
+sudo apt -y autoremove
