@@ -53,3 +53,44 @@
    ```
    sudo lb binary
    ```
+
+## How to build a disk image with persistency (for VirtualBox)
+
+1. Create a disk image file:
+
+   ```
+   truncate -s 2G live-image-amd64.img
+   ```
+
+2. Setup a loopback block device:
+
+   ```
+   sudo losetup -fP live-image-amd64.img && sudo losetup -a
+   ```
+
+   Note the output of last command to see which loopback device to use in following steps.
+
+3. Copy .iso to the image and setup persistency (assuming `/dev/loop0` is the name of the loopback device creared in previous step):
+
+   !!! BE SUPER DUPER EXTRA CAREFULL !!!
+
+   !!! AGAIN, DOUBLE CHECK EVERYTHING !!!
+
+   !!! SERIOUSLY !!!
+
+   ```
+   sudo ./mkusb-minp -p live-image-amd64.hybrid.iso /dev/loop0
+   ```
+
+4. Delete / deconfigure loopback device (assuming `/dev/loop0` is the name of the loopback device creared in previous step):
+
+   ```
+   sudo losetup -d /dev/loop0
+   ```
+
+5. Convert the image to `.vdi` format:
+
+   ```
+   qemu-img convert -f raw -O vdi live-image-amd64.img live-image-amd64.vdi
+   ```
+

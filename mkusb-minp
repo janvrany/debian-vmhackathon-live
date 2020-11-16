@@ -1,0 +1,610 @@
+#! /bin/bash
+
+#-----------------------------------------------------------------------------
+#
+## Copyright 2017-2020 Nio Wiklund
+#
+# GPLv3: GNU GPL version 3
+# <http://gnu.org/licenses/gpl.html>.
+#
+# This is free software: you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+
+# date        editor   comment
+# 20160226    sudodus  created from mk_mkdos in mkusb
+# 20171217    sudodus  converted to clone-to-pendrive
+# 20171217    sudodus  checking for mass storage devices as target
+# 20171218    sudodus  error output to help correct usage
+# 20191008    sudodus  creating persistence for Ubuntu 19.10 & Debian 10
+# 20191009    sudodus  seek last partition; grep ... 2> /dev/null
+# 20191010    sudodus  function prober and other tweaks with partprobe
+# 20191114    sudodus  'nopersistent' for fully non-persistent live drive
+# 20191214    sudodus  bugfix in main for targ_dev=; minor fix in srctst
+
+version=2.4
+
+# global variables
+
+inversvid="\0033[7m"
+resetvid="\0033[0m"
+greenback="\0033[1;37;42m"
+blueback="\0033[1;37;44m"
+redback="\0033[1;37;41m"
+safetybelt="This shellsript wraps a safety belt around 'dd'"
+safetybelt="$inversvid               $safetybelt               $resetvid"
+persistent=false
+nopersist=false
+pd=false         # persistent debian
+pu=false         # persistent ubuntu
+uver=
+verfail=false
+source=
+target=
+partn0=
+partnr=
+success=
+bar="--------------------------------------------------------------------------------"
+
+#######################################################################
+#######################################################################
+
+function cloner {
+
+echo '                 ***** cloner *****'
+echo "Trying to unmount partitions if mounted on the target device"
+umount "$target"*
+df | grep "$target"
+if [ $? -eq 0 ]
+then
+ echo -e "$redback cloner: could not unmount a partition on the target device $resetvid"
+ exit
+fi
+echo "$bar"
+echo -e "$inversvid Please wait until the cloning has finished and 'Done' is written $resetvid"
+
+which pv > /dev/null
+if [ $? -eq 0 ]
+then
+ pv "$source" | dd of="$target" bs=4096
+else
+ dd if="$source" of="$target" bs=4096
+fi
+if [ $? -eq 0 ]
+then
+ success=true
+else
+ success=false
+fi
+}
+########################################################################
+########################################################################
+
+function nper {
+
+echo '          ***** nper: no persistence at all for Ubuntu *****'
+
+echo "Trying to unmount partitions if mounted on the target device"
+umount "$target"*
+df | grep "$target"
+if [ $? -eq 0 ]
+then
+ echo -e "$redback nper: could not unmount a partition on the target device $resetvid"
+ exit
+fi
+echo "$bar"
+echo -e "$inversvid Please wait until the process has finished and 'Done' is written $resetvid"
+
+echo "..... Flash modified iso file to target ........................................"
+
+which pv > /dev/null
+if [ $? -eq 0 ]
+then
+ pv "$source" | sed 's/quiet splash/nopersistent/' > "$target"
+else
+ < "$source" sed 's/quiet splash/nopersistent/' > "$target"
+fi
+if [ $? -eq 0 ]
+then
+ success=true
+else
+ success=false
+fi
+}
+########################################################################
+########################################################################
+
+function puer {
+
+echo '          ***** puer: Persistence for Ubuntu *****'
+
+echo "Trying to unmount partitions if mounted on the target device"
+umount "$target"*
+df | grep "$target"
+if [ $? -eq 0 ]
+then
+ echo -e "$redback puer: could not unmount a partition on the target device $resetvid"
+ exit
+fi
+echo "$bar"
+echo -e "$inversvid Please wait until the process has finished and 'Done' is written $resetvid"
+
+echo "..... Flash modified iso file to target ........................................"
+
+which pv > /dev/null
+if [ $? -eq 0 ]
+then
+ pv "$source" | sed 's/quiet splash/persistent  /' > "$target"
+else
+ < "$source" sed 's/quiet splash/persistent  /' > "$target"
+fi
+if [ $? -eq 0 ]
+then
+ success=true
+else
+ success=false
+fi
+sleep 2
+sync
+sleep 4
+partprobe 2> /dev/null
+sleep 4
+partn0=/dev/$(lsblk -l -o name "${target}" | tail -n1)
+#echo "$partn0 after flashing"
+
+echo "..... Create partition for persistence ........................................."
+
+echo 'n
+p
+
+
+
+w' | fdisk "${target}"
+sleep 4
+sync
+sleep 4
+prober
+
+if ! test -b "$partnr"
+then
+ echo "The target's partition $partnr not found"
+ exit
+fi
+
+echo "..... Overwrite first mibibyte of partition for persistence ...................."
+
+dd if=/dev/zero of="$partnr" bs=1024 count=1024
+sleep 4
+sync
+partprobe 2> /dev/null
+sleep 4
+
+echo "..... Create file system in partition for persistence .........................."
+
+mkfs.ext2 -L casper-rw "$partnr"
+sleep 2
+if [ $? -ne 0 ]
+then
+ success=false
+fi
+}
+########################################################################
+########################################################################
+
+function pder {
+
+echo '          ***** pder: Persistence for Debian *****'
+
+echo "Trying to unmount partitions if mounted on the target device"
+umount "$target"*
+df | grep "$target"
+if [ $? -eq 0 ]
+then
+ echo -e "$redback pder: could not unmount a partition on the target device $resetvid"
+ exit
+fi
+echo "$bar"
+echo -e "$inversvid Please wait until the process has finished and 'Done' is written $resetvid"
+
+echo "..... Flash modified iso file to target ........................................"
+
+which pv > /dev/null
+if [ $? -eq 0 ]
+then
+ pv "$source" | sed 's/splash quiet/persistence /;s/quiet splash/persistence /' > "$target"
+else
+ < "$source" sed 's/splash quiet/persistence /;s/quiet splash/persistence /' > "$target"
+fi
+if [ $? -eq 0 ]
+then
+ success=true
+else
+ success=false
+fi
+#if [ "${target/mmc}" != "$target" ]
+#then
+# read -p "Press Enter to continue, when you have unplugged the target device '$target'
+#and *have plugged it back again*"
+#fi
+sleep 2
+sync
+sleep 4
+partprobe 2> /dev/null
+sleep 4
+partn0=/dev/$(lsblk -l -o name "${target}" | tail -n1)
+#echo "$partn0 after flashing"
+
+echo "..... Create partition for persistence ........................................."
+
+echo 'n
+p
+
+
+
+w' | fdisk "${target}"
+sleep 4
+sync
+sleep 4
+prober
+
+partnr=/dev/$(lsblk -l -o name "${target}" | tail -n1)
+if ! test -b "$partnr"
+then
+ echo "The target's partition $partnr not found"
+ exit
+fi
+
+echo "..... Overwrite first mibibyte of partition for persistence ...................."
+
+dd if=/dev/zero of="$partnr" bs=1024 count=1024
+sleep 4
+sync
+partprobe 2> /dev/null
+sleep 4
+
+echo "..... Create file system in partition for persistence .........................."
+
+mkfs.ext2 -L persistence "$partnr"
+sleep 2
+if [ $? -ne 0 ]
+then
+ success=false
+fi
+sync
+sleep 4
+
+lp1=$(mktemp -d)
+
+echo "..... Write 'persistence.conf' ................................................."
+
+mount "$partnr" "$lp1"
+if [ $? -ne 0 ]
+then
+ success=false
+fi
+echo '/ union' > "$lp1"/persistence.conf
+sync
+umount "$lp1"
+sleep 2
+rm -r "$lp1"
+}
+########################################################################
+########################################################################
+
+function prober {
+
+pcnt=0
+partnr=/dev/$(lsblk -l -o name "${target}" | tail -n1)
+while [ "$partnr" == "$partn0" ]
+do
+ if [ $pcnt -gt 15 ]
+ then
+  echo "$redback cannot identify new partition made by fdisk $resetvid"
+  exit
+ fi
+ partprobe 2> /dev/null
+ sleep 4
+ pcnt=$((pcnt + 1))
+ partnr=/dev/$(lsblk -l -o name "${target}" | tail -n1)
+ echo "prober: $partnr for persistence"
+done
+}
+########################################################################
+########################################################################
+
+function srctst {
+
+# checking the source file
+
+lp1=$(mktemp -d)
+
+mount -o loop "$source" "$lp1"
+if [ $? -ne 0 ]
+then
+ verfail=true
+ echo -e "$redback Loop mount of source file failed $resetvid"
+else
+ grep -i DISKNAME "$lp1/README.diskdefines" 2> /dev/null |grep buntu
+ if [ $? -eq 0 ]
+ then
+  pu=true
+  uver=$(grep DISKNAME "$lp1/README.diskdefines"|grep buntu|tr -s ' ' '\t'|cut -f 4)
+  if [ $? -ne 0 ]
+  then
+   verfail=true
+   echo "*** Not Ubuntu or an Ubuntu family flavour ***"
+  else
+   echo -e "$blueback Ubuntu or an Ubuntu family flavour $resetvid"
+   if [ "$uver" == "" ]
+   then
+    verfail=true
+    echo "*** Ubuntu version not found ***"  
+   elif [[ "$uver" < "19.10" ]]
+   then
+    verfail=true
+    echo "*** Ubuntu version $uver ***"
+   fi
+  fi
+ fi
+
+ grep -i debian "$lp1/.disk/info" 2> /dev/null
+ if [ $? -eq 0 ]
+ then
+  pd=true
+  uver=$(< "$lp1/.disk/info" tr -s ' ' '\t'|cut -f 5|cut -d '.' -f1)
+  if [ $? -ne 0 ]
+  then
+   verfail=true
+   echo "*** Not a Debian version for persistence ***"
+  else
+   echo -e "$blueback Debian $resetvid"
+   re='^[0-9]+$'
+   if [ "$uver" == "" ] || ! [[ $uver =~ $re ]]
+   then
+    verfail=true
+    echo "*** Debian version for persistence not found ***"  
+   elif [ "$uver" -lt "10" ]
+   then
+    verfail=true
+    echo "*** Debian version $uver ***"
+   fi
+  fi
+ fi
+fi
+
+if  ! $pu && ! $pd
+then
+ echo -e "$inversvid ***** Neither Ubuntu nor Debian ***** $resetvid"
+ read -p "Try persistence according to Ubuntu or Debian or live-only? (u/d/L)? " ans1
+ if [ "$ans1" == "u" ]
+ then
+  pu=true
+ elif [ "$ans1" == "d" ]
+ then
+  pd=true
+ else
+  persistent=false
+ fi 
+ verfail=true
+fi
+
+ans1="y"
+if $verfail && $persistent
+then
+ echo -e "$redback ${0##*/} might fail to create a persistent live drive $resetvid
+$redback from $source $resetvid
+$redback You can try with regular mkusb $resetvid"
+ ans1="n"
+ read -p "Do you want to continue anyway? (y/N) " ans1
+fi
+
+umount "$lp1"
+rmdir "$lp1"
+if [ "$ans1" != "y" ]
+then
+ exit
+fi
+
+if $persistent
+then
+ echo -e "$blueback Making persistent live drive of version $uver $resetvid"
+else
+ echo -e "$blueback Making live-only drive of version $uver $resetvid"
+fi
+echo "$bar"
+
+#exit
+
+}
+########################################################################
+########################################################################
+
+function usage {
+
+ /bin/echo -e "$safetybelt"
+ echo "Clone from an iso or image file to a target device (typically a USB pendrive)"
+ which pv > /dev/null
+ if [ $? -ne 0 ]
+ then
+  echo "You may want to install 'pv' (progress view)"
+ fi
+ echo "Usage:"
+ /bin/echo -e "$inversvid sudo /path/${0##*/} [-p|n] <source file> <target device> $resetvid"
+ echo "Cloning:"
+ echo " sudo $0 file.iso /dev/sdx      # cloning to standard live"
+ echo " sudo $0 file.img /dev/sdx      # cloning a general image"
+ echo "Persistence: for Ubuntu 19.10+ and Debian 10+"
+ echo " sudo $0 -p file.iso /dev/sdx   # persistent live drive"  
+ echo " sudo $0 -n file.iso /dev/sdx   # live-only drive"
+ echo "Help:"
+ echo "$0 -h"
+ echo "Version:"
+ echo "$0 -v"
+ /bin/echo -e "$blueback${inversvid}Available devices (tran-MODEL  device),$resetvid
+$inversvid${targ_dev}${resetvid}"
+ exit
+}
+########################################################################
+########################################################################
+#
+# main program
+#
+########################################################################
+########################################################################
+
+# print version and help text on demand
+
+if [ "$1" == "-v" ]
+then
+ echo "${0##*/} version $version"
+ exit
+elif [ "$1" == "-h" ]
+then
+ usage
+elif [ "$(whoami)" != "root" ]
+then
+ /bin/echo -e "$redback Run '${0##*/}' with sudo or as root $resetvid"
+fi 
+
+# identify possible target devices
+
+if ! test -d /dev/disk/by-id
+then
+ echo "This linux version does not create '/dev/disk/by-id', which is used
+by '${0##*/}'.
+
+'mkusb.bas' works with older and simpler versions of linux."
+ exit
+fi
+
+usb_dev=$(ls -l /dev/disk/by-id|grep usb|grep -v 'part.*->' \
+|sed -e 's/.*usb-/usb-/' -e 's#../..#/dev#' -e 's/^/ /' -e 's/$/ /'|sort -k3)
+
+targ_dev=$(find /dev/disk/by-id -type l -ls \
+|sed -e 's/^/ /' \
+|tr -s ' ' ' '|cut -d ' ' -f 12,14 \
+|grep -v '/dev/disk/by-id/wwn-'|grep -v 'part[1-9] ../../' \
+|sed -e 's%/dev/disk/by-id/%%' -e 's%../../% /dev/%'|sort -k2 \
+|sed -e 's/^/ /' -e 's/$/ /')
+
+
+# identify source file and target device from command line parameters
+
+if [ "$1" == "-p" ]
+then
+ persistent=true
+ shift
+fi
+if [ "$1" == "-n" ]
+then
+ nopersist=true
+ shift
+fi
+
+source="$1"
+target="$2"
+
+if test -b "$target"
+then
+ leng=${#target}
+ leng1=$((leng - 1))
+ trunk=${target:0:leng1}
+ leng2=$((leng - 2))
+ trun2=${target:0:leng2}
+fi
+#echo "trunk=$trunk"
+#echo "source=$source"
+
+if [ $# -eq 2 ]
+then
+ if ! test -s "$source"
+ then
+  /bin/echo -e "$redback Bad source file $inversvid $source $resetvid"
+ elif ! test -b "$target" || test -b "$trunk" || test -b "$trun2" 
+ then
+  /bin/echo -e "$redback Bad target device $inversvid $target $resetvid"
+ fi
+fi
+
+# usage text
+
+if [ "$(whoami)" != "root" ] || [ $# -gt 2 ] || ! test -s "$source" || \
+! test -b "$target" || test -b "$trunk" || test -b "$trun2" 
+then
+ usage
+fi
+
+# checkpoint
+
+/bin/echo -en "$safetybelt
+It helps you select the target device in a safe way to avoid
+overwriting valuable data by mistake. $blueback Please double-check ${resetvid}
+at the final checkpoint! [press Enter to continue] $resetvid"
+read -n1 tmp
+echo ""
+/bin/echo -e "${inversvid} Please check that you will clone to the correct target device! ${resetvid}" 
+/bin/echo -e "${targ_dev}"
+/bin/echo -en "${inversvid}"
+lsblk -o NAME,MODEL,FSTYPE,LABEL,MOUNTPOINT,SIZE,NAME "$target"
+/bin/echo -e "${resetvid}"
+
+echo "$usb_dev"|grep -m1 "$target" > /dev/null
+if [ $? -ne 0 ]
+then
+ /bin/echo -en "$redback Not a USB device. Do you really want to overwrite $inversvid ${target} $resetvid$redback ? (y/N)$resetvid "
+ read ans
+ if [ "$ans" != "y" ]
+ then
+  exit
+ fi
+fi
+
+/bin/echo -e "$blueback Final checkpoint $resetvid"
+/bin/echo -en "Do you want to overwrite $inversvid ${target} $resetvid? (y/N) "
+read ans
+if [ "$ans" == "y" ]
+then
+ if $persistent || $nopersist
+ then
+  srctst # test the source file
+ fi
+
+# make the boot device
+
+ if $pd && $persistent
+ then
+  pder
+ elif $pu && $persistent
+ then
+  puer
+ elif $pu && $nopersist
+ then
+  nper
+ else
+  cloner
+ fi
+
+# final tasks
+
+ sleep 2
+ sync
+ 
+ if [ "${target/mmc}" != "$target" ]
+ then
+  read -p "Press Enter to continue, when you have unplugged the target device '$target'
+and maybe have plugged it back again"
+ fi
+ sleep 2
+ partprobe 2> /dev/null
+ sleep 2
+ umount "${target}?" "${target}p?" 2> /dev/null
+ sleep 2
+ echo "$bar"
+ lsblk -o NAME,MODEL,FSTYPE,LABEL,MOUNTPOINT,SIZE,NAME "$target"
+
+ if $success
+ then
+  /bin/echo -e "$greenback Done :-) $resetvid"
+ else
+  /bin/echo -e "$redback failed :-( $resetvid"
+ fi
+fi
