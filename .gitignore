@@ -9,6 +9,8 @@ config/chroot
 config/common
 config/source
 
+config/includes.chroot/opt/
+
 chroot.*
 chroot
 

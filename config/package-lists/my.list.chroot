@@ -43,3 +43,5 @@ cmake
 firejail
 gcc 
 g++
+gedit
+gedit-plugins

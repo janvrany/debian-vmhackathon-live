@@ -1,0 +1,1 @@
+alias vdb="stx --load jv:vdb --run VDBStartup"
