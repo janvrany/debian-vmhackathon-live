@@ -4,11 +4,11 @@ set -ex
 
 echo "Installing Powerlang / Open Bee-DMR"
 
-powerlang_repo=https://github.com/powerlang/powerlang
-powerlang_branch=master
+powerlang_repo=https://github.com/janvrany/powerlang
+powerlang_branch=jv/wip/debug-support
 
-bee_dmr_repo=https://github.com/powerlang/bee-dmr
-bee_dmr_branch=master
+bee_dmr_repo=https://github.com/janvrany/bee-dmr
+bee_dmr_branch=jv/wip/debug-support
 
 git clone --branch "${powerlang_branch}" "${powerlang_repo}" powerlang
 mkdir -p powerlang/bootstrap/specs/bee-dmr
