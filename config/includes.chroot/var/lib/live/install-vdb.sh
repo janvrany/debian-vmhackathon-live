@@ -4,7 +4,13 @@ set -ex
 
 echo "Installing VDB"
 
-mkdir -p /opt/vdb/jv
+if [ -d config/includes.chroot ]; then
+    prefix=config/includes.chroot/opt/vdb
+else
+	prefix=/opt/vdb
+fi
 
-hg clone https://swing.fit.cvut.cz/hg/jv-libgdbs /opt/vdb/jv/libgdbs
-hg clone https://swing.fit.cvut.cz/hg/jv-vdb /opt/vdb/jv/vdb
+mkdir -p "${prefix}/jv"
+
+hg clone https://swing.fit.cvut.cz/hg/jv-libgdbs "${prefix}/jv/libgdbs"
+hg clone https://swing.fit.cvut.cz/hg/jv-vdb     "${prefix}/jv/vdb"
