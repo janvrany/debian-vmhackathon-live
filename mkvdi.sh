@@ -19,8 +19,8 @@ set -x
 
 LOOPDEV=/dev/loop0
 
-truncate -s 2G live-image-amd64.img
-sudo losetup -P "${LOOPDEV}" live-image-amd64.img 
+truncate -s 10G live-image-amd64.img
+sudo losetup -P "${LOOPDEV}" live-image-amd64.img
 sudo losetup -a
 sudo ./mkusb-minp -p live-image-amd64.hybrid.iso "${LOOPDEV}"
 read ignored

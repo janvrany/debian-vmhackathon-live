@@ -59,7 +59,7 @@
 1. Create a disk image file:
 
    ```
-   truncate -s 2G live-image-amd64.img
+   truncate -s 10G live-image-amd64.img
    ```
 
 2. Setup a loopback block device:
